@@ -32,40 +32,40 @@ public class DemostoreApiSimulation extends Simulation {
         .headers(jsonContentHeader)
         .body(StringBody("{\"username\": \"admin\",\"password\": \"admin\"}"))
         .check(status().is(200))
-        .check(jsonPath("$.token").saveAs("jwt")));
+        .check(jmesPath("token").saveAs("jwt")));
   }
 
   private static class Categories {
     public static ChainBuilder list =
       exec(http("List categories")
         .get("/api/category")
-        .check(jsonPath("$[?(@.id == 6)].name").is("For Her")));
+        .check(jmesPath("[? id == `6`].name").ofList().is(List.of("For Her"))));
 
     public static ChainBuilder update =
       exec(http("Update category")
         .put("/api/category/7")
         .headers(authorizedHeader)
         .body(StringBody("{\"name\": \"Everyone\"}"))
-        .check(jsonPath("$.name").is("Everyone")));
+        .check(jmesPath("name").is("Everyone")));
   }
 
   private static class Products {
     public static ChainBuilder list =
       exec(http("List products")
         .get("/api/product?category=7")
-        .check(jsonPath("$[?(@.categoryId != \"7\")]").notExists()));
+        .check(jmesPath("[? categoryId != '7']").ofList().is(Collections.emptyList())));
 
     public static ChainBuilder get =
       exec(http("Get product")
         .get("/api/product/34")
-        .check(jsonPath("$.id").ofInt().is(34)));
+        .check(jmesPath("id").ofInt().is(34)));
 
     public static ChainBuilder update =
       exec(http("Update product")
         .put("/api/product/34")
         .headers(authorizedHeader)
         .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/update-product.json"))
-        .check(jsonPath("$.price").is("15.99")));
+        .check(jmesPath("price").is("15.99")));
 
     public static ChainBuilder create =
       repeat(3, "productCount").on(
