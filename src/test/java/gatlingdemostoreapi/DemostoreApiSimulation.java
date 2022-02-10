@@ -134,12 +134,11 @@ public class DemostoreApiSimulation extends Simulation {
 
   {
     setUp(
-      scn.injectOpen(
-        atOnceUsers(2),
-        nothingFor(Duration.ofSeconds(10)),
-        rampUsers(15).during(Duration.ofSeconds(10)),
-        nothingFor(Duration.ofSeconds(10)),
-        constantUsersPerSec(1).during(Duration.ofSeconds(20))
+      scn.injectClosed(
+        rampConcurrentUsers(0).to(10).during(Duration.ofSeconds(10)),
+        constantConcurrentUsers(10).during(Duration.ofSeconds(20)),
+        rampConcurrentUsers(10).to(20).during(Duration.ofSeconds(10)),
+        constantConcurrentUsers(20).during(Duration.ofSeconds(20))
       )
     )
       .protocols(httpProtocol);
