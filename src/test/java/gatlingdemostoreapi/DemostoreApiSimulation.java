@@ -35,9 +35,22 @@ public class DemostoreApiSimulation extends Simulation {
         .check(jsonPath("$.token").saveAs("jwt")));
   }
 
+  private static class Categories {
+    public static ChainBuilder list =
+      exec(http("List categories")
+        .get("/api/category")
+        .check(jsonPath("$[?(@.id == 6)].name").is("For Her")));
+
+    public static ChainBuilder update =
+      exec(http("Update category")
+        .put("/api/category/7")
+        .headers(authorizedHeader)
+        .body(StringBody("{\"name\": \"Everyone\"}"))
+        .check(jsonPath("$.name").is("Everyone")));
+  }
+
   private ScenarioBuilder scn = scenario("DemostoreApiSimulation")
-    .exec(http("List categories")
-      .get("/api/category"))
+    .exec(Categories.list)
     .pause(2)
     .exec(http("List products")
       .get("/api/product?category=7"))
@@ -67,10 +80,7 @@ public class DemostoreApiSimulation extends Simulation {
       .headers(authorizedHeader)
       .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product-3.json")))
     .pause(2)
-    .exec(http("Update category")
-      .put("/api/category/7")
-      .headers(authorizedHeader)
-      .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/update-category.json")));
+    .exec(Categories.update);
 
   {
 	  setUp(scn.injectOpen(atOnceUsers(1))).protocols(httpProtocol);
