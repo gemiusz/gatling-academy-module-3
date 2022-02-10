@@ -27,6 +27,15 @@ public class DemostoreApiSimulation extends Simulation {
     Map.entry("authorization", "Bearer #{jwt}")
   );
 
+  private static String getProperty(String propertyName, String defaultValue) {
+    String envValue = System.getenv(propertyName);
+    return envValue != null ? envValue : System.getProperty(propertyName, defaultValue);
+  }
+
+  private static int userCount = Integer.parseInt(getProperty("USERS", "5"));
+  private static int rampDuration = Integer.parseInt(getProperty("RAMP_DURATION", "10"));
+  private static int testDuration = Integer.parseInt(getProperty("DURATION", "60"));
+
   private static ChainBuilder initSession = exec(session -> session.set("authenticated", false));
 
   private static class Authentication {
@@ -161,7 +170,7 @@ public class DemostoreApiSimulation extends Simulation {
 
   private static class Scenarios {
     public static ScenarioBuilder defaultScn = scenario("Default load test")
-      .during(Duration.ofSeconds(60))
+      .during(Duration.ofSeconds(testDuration))
       .on(
         randomSwitch().on(
           Choice.withWeight(20d, exec(UserJourneys.admin)),
@@ -182,17 +191,9 @@ public class DemostoreApiSimulation extends Simulation {
 
   {
     setUp(
-      scn.injectOpen(
-        constantUsersPerSec(2).during(Duration.ofMinutes(3))
-      )
-    )
-      .protocols(httpProtocol)
-      .throttle(
-        reachRps(10).in(Duration.ofSeconds(30)),
-        holdFor(Duration.ofSeconds(60)),
-        jumpToRps(20),
-        holdFor(Duration.ofSeconds(60))
-      )
-      .maxDuration(Duration.ofMinutes(3));
+      Scenarios.defaultScn
+        .injectOpen(rampUsers(userCount).during(Duration.ofSeconds(rampDuration)))
+        .protocols(httpProtocol)
+    );
   }
 }
