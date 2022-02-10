@@ -41,21 +41,30 @@ public class DemostoreApiSimulation extends Simulation {
   }
 
   private static class Categories {
+
+    private static FeederBuilder.Batchable<String> categoriesFeeder =
+      csv("data/categories.csv").random();
+
     public static ChainBuilder list =
       exec(http("List categories")
         .get("/api/category")
         .check(jmesPath("[? id == `6`].name").ofList().is(List.of("For Her"))));
 
     public static ChainBuilder update =
-      exec(Authentication.authenticate)
+      feed(categoriesFeeder)
+        .exec(Authentication.authenticate)
         .exec(http("Update category")
-          .put("/api/category/7")
+          .put("/api/category/#{categoryId}")
           .headers(authorizedHeader)
-          .body(StringBody("{\"name\": \"Everyone\"}"))
-          .check(jmesPath("name").is("Everyone")));
+          .body(StringBody("{\"name\": \"#{categoryName}\"}"))
+          .check(jmesPath("name").is("#{categoryName}")));
   }
 
   private static class Products {
+
+    private static FeederBuilder.Batchable<String> productsFeeder =
+      csv("data/products.csv").circular();
+
     public static ChainBuilder list =
       exec(http("List products")
         .get("/api/product?category=7")
@@ -76,13 +85,12 @@ public class DemostoreApiSimulation extends Simulation {
 
     public static ChainBuilder create =
       exec(Authentication.authenticate)
-        .repeat(3, "productCount").on(
-          exec(
-            http("Create product #{productCount}")
-              .post("/api/product")
-              .headers(authorizedHeader)
-              .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product-#{productCount}.json"))
-          )
+        .feed(productsFeeder)
+        .exec(
+          http("Create product #{productName}")
+            .post("/api/product")
+            .headers(authorizedHeader)
+            .body(ElFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product.json"))
         );
   }
 
@@ -98,7 +106,7 @@ public class DemostoreApiSimulation extends Simulation {
     .pause(2)
     .exec(Products.update)
     .pause(2)
-    .exec(Products.create)
+    .repeat(3).on(exec(Products.create))
     .pause(2)
     .exec(Categories.update);
 
