@@ -25,14 +25,19 @@ public class DemostoreApiSimulation extends Simulation {
     Map.entry("authorization", "Bearer #{jwt}")
   );
 
+  private ChainBuilder initSession = exec(session -> session.set("authenticated", false));
+
   private static class Authentication {
     public static ChainBuilder authenticate =
-      exec(http("Authenticate")
-        .post("/api/authenticate")
-        .headers(jsonContentHeader)
-        .body(StringBody("{\"username\": \"admin\",\"password\": \"admin\"}"))
-        .check(status().is(200))
-        .check(jmesPath("token").saveAs("jwt")));
+      doIf(session -> !session.getBoolean("authenticated")).then(
+        exec(http("Authenticate")
+          .post("/api/authenticate")
+          .headers(jsonContentHeader)
+          .body(StringBody("{\"username\": \"admin\",\"password\": \"admin\"}"))
+          .check(status().is(200))
+          .check(jmesPath("token").saveAs("jwt")))
+          .exec(session -> session.set("authenticated", true))
+      );
   }
 
   private static class Categories {
@@ -42,11 +47,12 @@ public class DemostoreApiSimulation extends Simulation {
         .check(jmesPath("[? id == `6`].name").ofList().is(List.of("For Her"))));
 
     public static ChainBuilder update =
-      exec(http("Update category")
-        .put("/api/category/7")
-        .headers(authorizedHeader)
-        .body(StringBody("{\"name\": \"Everyone\"}"))
-        .check(jmesPath("name").is("Everyone")));
+      exec(Authentication.authenticate)
+        .exec(http("Update category")
+          .put("/api/category/7")
+          .headers(authorizedHeader)
+          .body(StringBody("{\"name\": \"Everyone\"}"))
+          .check(jmesPath("name").is("Everyone")));
   }
 
   private static class Products {
@@ -61,24 +67,27 @@ public class DemostoreApiSimulation extends Simulation {
         .check(jmesPath("id").ofInt().is(34)));
 
     public static ChainBuilder update =
-      exec(http("Update product")
-        .put("/api/product/34")
-        .headers(authorizedHeader)
-        .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/update-product.json"))
-        .check(jmesPath("price").is("15.99")));
+      exec(Authentication.authenticate)
+        .exec(http("Update product")
+          .put("/api/product/34")
+          .headers(authorizedHeader)
+          .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/update-product.json"))
+          .check(jmesPath("price").is("15.99")));
 
     public static ChainBuilder create =
-      repeat(3, "productCount").on(
-        exec(
-          http("Create product #{productCount}")
-            .post("/api/product")
-            .headers(authorizedHeader)
-            .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product-#{productCount}.json"))
-        )
-      );
+      exec(Authentication.authenticate)
+        .repeat(3, "productCount").on(
+          exec(
+            http("Create product #{productCount}")
+              .post("/api/product")
+              .headers(authorizedHeader)
+              .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product-#{productCount}.json"))
+          )
+        );
   }
 
   private ScenarioBuilder scn = scenario("DemostoreApiSimulation")
+    .exec(initSession)
     .exec(Categories.list)
     .pause(2)
     .exec(Products.list)
