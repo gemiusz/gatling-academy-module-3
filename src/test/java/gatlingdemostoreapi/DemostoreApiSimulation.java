@@ -159,6 +159,27 @@ public class DemostoreApiSimulation extends Simulation {
 				);
   }
 
+  private static class Scenarios {
+    public static ScenarioBuilder defaultScn = scenario("Default load test")
+      .during(Duration.ofSeconds(60))
+      .on(
+        randomSwitch().on(
+          Choice.withWeight(20d, exec(UserJourneys.admin)),
+          Choice.withWeight(40d, exec(UserJourneys.priceScrapper)),
+          Choice.withWeight(40d, exec(UserJourneys.priceUpdater))
+        )
+      );
+
+    public static ScenarioBuilder noAdminsScn = scenario("Load test without admin users")
+      .during(Duration.ofSeconds(60))
+      .on(
+        randomSwitch().on(
+          Choice.withWeight(60d, exec(UserJourneys.priceScrapper)),
+          Choice.withWeight(40d, exec(UserJourneys.priceUpdater))
+        )
+      );
+  }
+
   {
     setUp(
       scn.injectOpen(
