@@ -133,6 +133,15 @@ public class DemostoreApiSimulation extends Simulation {
     .exec(Categories.update);
 
   {
-	  setUp(scn.injectOpen(atOnceUsers(1))).protocols(httpProtocol);
+    setUp(
+      scn.injectOpen(
+        atOnceUsers(2),
+        nothingFor(Duration.ofSeconds(10)),
+        rampUsers(15).during(Duration.ofSeconds(10)),
+        nothingFor(Duration.ofSeconds(10)),
+        constantUsersPerSec(1).during(Duration.ofSeconds(20))
+      )
+    )
+      .protocols(httpProtocol);
   }
 }
