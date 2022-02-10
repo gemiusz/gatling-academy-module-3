@@ -2,6 +2,8 @@ package gatlingdemostoreapi;
 
 import java.time.Duration;
 import java.util.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import io.gatling.javaapi.core.*;
 import io.gatling.javaapi.http.*;
@@ -57,7 +59,7 @@ public class DemostoreApiSimulation extends Simulation {
           .put("/api/category/#{categoryId}")
           .headers(authorizedHeader)
           .body(StringBody("{\"name\": \"#{categoryName}\"}"))
-          .check(jmesPath("name").is("#{categoryName}")));
+          .check(jmesPath("name").isEL("#{categoryName}")));
   }
 
   private static class Products {
@@ -68,20 +70,40 @@ public class DemostoreApiSimulation extends Simulation {
     public static ChainBuilder list =
       exec(http("List products")
         .get("/api/product?category=7")
-        .check(jmesPath("[? categoryId != '7']").ofList().is(Collections.emptyList())));
+        .check(jmesPath("[? categoryId != '7']").ofList().is(Collections.emptyList()))
+        .check(jmesPath("[*].id").ofList().saveAs("allProductIds")));
 
     public static ChainBuilder get =
-      exec(http("Get product")
-        .get("/api/product/34")
-        .check(jmesPath("id").ofInt().is(34)));
+      exec(session -> {
+        List<Integer> allProductIds = session.getList("allProductIds");
+        return session.set("productId", allProductIds.get(new Random().nextInt(allProductIds.size())));
+      })
+				.exec(http("Get product")
+					.get("/api/product/#{productId}")
+					.check(jmesPath("id").ofInt().isEL("#{productId}"))
+          .check(jmesPath("@").ofMap().saveAs("product")));
 
     public static ChainBuilder update =
       exec(Authentication.authenticate)
-        .exec(http("Update product")
-          .put("/api/product/34")
-          .headers(authorizedHeader)
-          .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/update-product.json"))
-          .check(jmesPath("price").is("15.99")));
+        .exec( session -> {
+          Map<String, Object> product = session.getMap("product");
+          String description = (String) product.get("description");
+              String price = new BigDecimal((String) product.get("price"))
+            .divide(new BigDecimal(2), RoundingMode.DOWN)
+            .setScale(2, RoundingMode.DOWN)
+            .toString();
+          return session
+            .set("productCategoryId", product.get("categoryId"))
+            .set("productName", product.get("name"))
+            .set("productDescription", description)
+            .set("productImage", product.get("image"))
+            .set("productPrice", price);
+        })
+				.exec(http("Update product #{productName}")
+					.put("/api/product/#{productId}")
+					.headers(authorizedHeader)
+					.body(ElFileBody("gatlingdemostoreapi/demostoreapisimulation/create-product.json"))
+          .check(jmesPath("price").isEL("#{productPrice}")));
 
     public static ChainBuilder create =
       exec(Authentication.authenticate)
