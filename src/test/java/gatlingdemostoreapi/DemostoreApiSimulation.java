@@ -27,7 +27,7 @@ public class DemostoreApiSimulation extends Simulation {
     Map.entry("authorization", "Bearer #{jwt}")
   );
 
-  private ChainBuilder initSession = exec(session -> session.set("authenticated", false));
+  private static ChainBuilder initSession = exec(session -> session.set("authenticated", false));
 
   private static class Authentication {
     public static ChainBuilder authenticate =
@@ -67,6 +67,11 @@ public class DemostoreApiSimulation extends Simulation {
     private static FeederBuilder.Batchable<String> productsFeeder =
       csv("data/products.csv").circular();
 
+    public static ChainBuilder listAll =
+      exec(http("List all products")
+        .get("/api/product")
+        .check(jmesPath("[*]").ofList().saveAs("allProducts")));
+
     public static ChainBuilder list =
       exec(http("List products")
         .get("/api/product?category=7")
@@ -97,7 +102,8 @@ public class DemostoreApiSimulation extends Simulation {
             .set("productName", product.get("name"))
             .set("productDescription", description)
             .set("productImage", product.get("image"))
-            .set("productPrice", price);
+            .set("productPrice", price)
+            .set("productId", product.get("id"));
         })
 				.exec(http("Update product #{productName}")
 					.put("/api/product/#{productId}")
@@ -116,21 +122,42 @@ public class DemostoreApiSimulation extends Simulation {
         );
   }
 
-  private ScenarioBuilder scn = scenario("DemostoreApiSimulation")
-    .exec(initSession)
-    .exec(Categories.list)
-    .pause(2)
-    .exec(Products.list)
-    .pause(2)
-    .exec(Products.get)
-    .pause(2)
-    .exec(Authentication.authenticate)
-    .pause(2)
-    .exec(Products.update)
-    .pause(2)
-    .repeat(3).on(exec(Products.create))
-    .pause(2)
-    .exec(Categories.update);
+  private static class UserJourneys {
+    private static Duration minPause = Duration.ofMillis(200);
+    private static Duration maxPause = Duration.ofSeconds(3);
+
+    public static ChainBuilder admin =
+      exec(initSession)
+        .exec(Categories.list)
+        .pause(minPause, maxPause)
+        .exec(Products.list)
+        .pause(minPause, maxPause)
+        .exec(Products.get)
+        .pause(minPause, maxPause)
+        .exec(Products.update)
+        .pause(minPause, maxPause)
+        .repeat(3).on(exec(Products.create))
+        .pause(minPause, maxPause)
+				.exec(Categories.update);
+
+    public static ChainBuilder priceScrapper =
+      exec(
+        Categories.list,
+        Products.listAll
+      );
+
+    public static ChainBuilder priceUpdater =
+      exec(initSession)
+        .exec(Products.listAll)
+        .repeat("#{allProducts.size()}", "productIndex").on(
+          exec(session -> {
+            int index = session.getInt("productIndex");
+            List<Object> allProducts = session.getList("allProducts");
+            return session.set("product", allProducts.get(index));
+          })
+            .exec(Products.update)
+				);
+  }
 
   {
     setUp(
