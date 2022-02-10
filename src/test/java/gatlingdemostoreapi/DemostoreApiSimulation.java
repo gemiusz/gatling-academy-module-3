@@ -17,13 +17,23 @@ public class DemostoreApiSimulation extends Simulation {
     .baseUrl("http://demostore.gatling.io")
     .acceptHeader("application/json");
 
-  private Map<CharSequence, String> jsonContentHeader =
+  private static Map<CharSequence, String> jsonContentHeader =
     Map.of("Content-Type", "application/json");
 
-  private Map<CharSequence, String> authorizedHeader = Map.ofEntries(
+  private static Map<CharSequence, String> authorizedHeader = Map.ofEntries(
     Map.entry("Content-Type", "application/json"),
     Map.entry("authorization", "Bearer #{jwt}")
   );
+
+  private static class Authentication {
+    public static ChainBuilder authenticate =
+      exec(http("Authenticate")
+        .post("/api/authenticate")
+        .headers(jsonContentHeader)
+        .body(StringBody("{\"username\": \"admin\",\"password\": \"admin\"}"))
+        .check(status().is(200))
+        .check(jsonPath("$.token").saveAs("jwt")));
+  }
 
   private ScenarioBuilder scn = scenario("DemostoreApiSimulation")
     .exec(http("List categories")
@@ -35,11 +45,7 @@ public class DemostoreApiSimulation extends Simulation {
     .exec(http("Get product")
       .get("/api/product/34"))
     .pause(2)
-    .exec(http("Authenticate")
-      .post("/api/authenticate")
-      .headers(jsonContentHeader)
-      .body(RawFileBody("gatlingdemostoreapi/demostoreapisimulation/authenticate-admin.json"))
-      .check(jsonPath("$.token").saveAs("jwt")))
+    .exec(Authentication.authenticate)
     .pause(2)
     .exec(http("Update product")
       .put("/api/product/34")
